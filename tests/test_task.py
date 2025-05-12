@@ -108,3 +108,10 @@ def test_value_equals_sum_for_every_example(digits):
         assert ex.value == ex.a + ex.b
         assert ex.target_digits == str(ex.a + ex.b)[::-1]
         assert reward(completion(ex.target_digits), ex) == 3.0
+
+
+def test_task_rejects_more_pairs_than_the_digit_range_holds():
+    # 1-digit operands give 9 * 9 = 81 distinct pairs.
+    with pytest.raises(ValueError):
+        AdditionTask(digits=1, n_train=60, n_test=40, seed=0)
+    AdditionTask(digits=1, n_train=41, n_test=40, seed=0)

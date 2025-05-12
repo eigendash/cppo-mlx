@@ -103,6 +103,7 @@ def _core_loss(
     beta: float,
     clip_eps: float,
     denominator: mx.array | None = None,
+    n_sampled: float | None = None,
 ):
     ratio = mx.exp(logp - logp_old)
     adv = advantages[..., None]
@@ -116,7 +117,8 @@ def _core_loss(
     if denominator is None:
         denominator = total_weight
     objective = mx.sum(per_completion * weight) / mx.maximum(denominator, 1.0)
-    n_sampled = float(advantages.shape[0] * advantages.shape[1])
+    if n_sampled is None:
+        n_sampled = float(advantages.shape[0] * advantages.shape[1])
     info = {
         "loss": -objective,
         "objective": objective,
@@ -140,7 +142,17 @@ def grpo_loss(
     """Full-group GRPO loss (lower is better) and a small info dict."""
     advantages = mx.array(advantages, dtype=mx.float32)
     ones = mx.ones(advantages.shape, dtype=mx.float32)
-    return _core_loss(logp, logp_old, logp_ref, advantages, token_mask, ones, beta, clip_eps)
+    return _core_loss(
+        logp,
+        logp_old,
+        logp_ref,
+        advantages,
+        token_mask,
+        ones,
+        beta,
+        clip_eps,
+        n_sampled=float(advantages.shape[0] * advantages.shape[1]),
+    )
 
 
 def cppo_loss(
@@ -170,7 +182,52 @@ def cppo_loss(
         # The literal eq. 7: the divisor stays the group size even after pruning.
         denominator = mx.array(float(advantages.shape[0] * advantages.shape[1]))
     return _core_loss(
-        logp, logp_old, logp_ref, advantages, token_mask, mask, beta, clip_eps, denominator
+        logp,
+        logp_old,
+        logp_ref,
+        advantages,
+        token_mask,
+        mask,
+        beta,
+        clip_eps,
+        denominator,
+        n_sampled=float(advantages.shape[0] * advantages.shape[1]),
+    )
+
+
+def retained_loss(
+    logp: mx.array,
+    logp_old: mx.array,
+    logp_ref: mx.array,
+    advantages: mx.array,
+    token_mask: mx.array,
+    denominator: mx.array | None = None,
+    beta: float = DEFAULT_BETA,
+    clip_eps: float = DEFAULT_CLIP,
+    n_sampled: float | None = None,
+):
+    """The practical form of the CPPO loss, over a gathered retained set.
+
+    Same maths as :func:`cppo_loss`, but the completions arrive already pruned:
+    ``logp`` and friends are (K, C), where K is the number of completions that
+    survived pruning, and ``n_sampled`` is how many completions were drawn
+    before pruning (used only for reporting).  With ``denominator=None`` the
+    divisor is K, i.e. the 1/k of paper eq. 9.
+    """
+    logp = mx.array(logp)
+    advantages = mx.array(advantages, dtype=mx.float32)
+    ones = mx.ones(advantages[None].shape, dtype=mx.float32)
+    return _core_loss(
+        logp[None],
+        logp_old[None],
+        logp_ref[None],
+        advantages[None],
+        token_mask[None],
+        ones,
+        beta,
+        clip_eps,
+        denominator,
+        n_sampled,
     )
 
 

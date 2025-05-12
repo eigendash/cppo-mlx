@@ -113,6 +113,11 @@ class AdditionTask:
         hi = 10**self.digits - 1
         rng = random.Random(self.seed)
         total = self.n_train + self.n_test
+        if total > (hi - lo + 1) ** 2:
+            raise ValueError(
+                f"asked for {total} distinct {self.digits}-digit pairs but only "
+                f"{(hi - lo + 1) ** 2} exist"
+            )
         seen: set[tuple[int, int]] = set()
         pairs: list[tuple[int, int]] = []
         while len(pairs) < total:
