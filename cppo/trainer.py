@@ -48,6 +48,7 @@ class TrainConfig:
     questions: int = 8  # questions whose retained completions fill the batch
     prune_rate: float = 0.0
     prune_threshold: float = 0.0
+    dynamic_allocation: bool = True
     normalisation: str = "retained"
     beta: float = 0.04
     clip_eps: float = 0.2
@@ -64,11 +65,14 @@ class TrainConfig:
     def prunes(self) -> bool:
         return self.prune_rate > 0.0 or self.prune_threshold > 0.0
 
+    def questions_per_step(self) -> int:
+        """Questions sampled per step, after dynamic allocation if enabled."""
+        if self.prune_rate > 0.0 and self.dynamic_allocation:
+            return dynamic_question_count(self.questions, self.prune_rate)
+        return self.questions
+
     def samples_per_step(self) -> int:
-        """Completions generated per step (the dynamic-allocation batch)."""
-        if self.prune_rate > 0.0:
-            return dynamic_question_count(self.questions, self.prune_rate) * self.group_size
-        return self.questions * self.group_size
+        return self.questions_per_step() * self.group_size
 
 
 def retained_per_question(group_size: int, prune_rate: float) -> int:
@@ -138,6 +142,8 @@ class Budget:
     wall_time: float = 0.0
     losses: list[float] = field(default_factory=list)
     grad_norms: list[float] = field(default_factory=list)
+    reward_means: list[float] = field(default_factory=list)
+    degenerate: list[float] = field(default_factory=list)
     curve: list[dict] = field(default_factory=list)
 
     def as_dict(self) -> dict:
@@ -150,6 +156,8 @@ class Budget:
             "mean_loss": float(np.mean(self.losses)) if self.losses else None,
             "mean_grad_norm": float(np.mean(self.grad_norms)) if self.grad_norms else None,
             "grad_norm_std": float(np.std(self.grad_norms)) if self.grad_norms else None,
+            "mean_reward": float(np.mean(self.reward_means)) if self.reward_means else None,
+            "degenerate_fraction": float(np.mean(self.degenerate)) if self.degenerate else None,
             "curve": self.curve,
         }
 
@@ -286,7 +294,24 @@ def rollout_denominator(rollout: Rollout, cfg: TrainConfig):
 
 
 def rollout_loss(model: TinyLM, rollout: Rollout, cfg: TrainConfig):
-    """CPPO (or GRPO, when nothing is pruned) loss over the retained set."""
+    """CPPO (or GRPO, when nothing is pruned) loss over the retained set.
+
+    A threshold can prune every completion of every question.  Those steps have
+    no gradient, so the loss is the constant zero.
+    """
+    if rollout.n_retained == 0:
+        zero = mx.zeros(1).sum()
+        return zero, {
+            "loss": zero,
+            "objective": -zero,
+            "kl": zero,
+            "ratio_mean": zero,
+            "n_retained": 0.0,
+            "retained_fraction": 0.0,
+            "pruned": True,
+            "retained": 0,
+            "empty": True,
+        }
     logp = completion_logprobs(model, rollout.r_prompt, rollout.r_prompt_mask, rollout.r_completion)
     loss, info = retained_loss(
         logp,
@@ -398,9 +423,7 @@ def train_rl(
     optimizer = optim.AdamW(learning_rate=cfg.lr)
     rng = np.random.default_rng(cfg.seed)
     data = shuffle_examples(task.train, rng)
-    n_questions = (
-        dynamic_question_count(cfg.questions, cfg.prune_rate) if cfg.prune_rate > 0 else cfg.questions
-    )
+    n_questions = cfg.questions_per_step()
     budget = Budget()
     started = time.perf_counter()
     for step in range(steps):
@@ -414,13 +437,19 @@ def train_rl(
         budget.gradient_tokens += rollout.n_retained * rollout.completion.shape[-1]
         budget.losses.append(loss)
         budget.grad_norms.append(norm)
+        budget.reward_means.append(float(rollout.rewards.mean()))
+        budget.degenerate.append(rollout.degenerate_groups / max(rollout.batch, 1))
         if eval_every and eval_examples is not None and (step + 1) % eval_every == 0:
+            window = budget.reward_means[-eval_every:]
             budget.curve.append(
                 {
                     "step": step + 1,
                     "sampled_completions": budget.sampled_completions,
                     "retained_completions": budget.retained_completions,
                     "accuracy": evaluate(model, eval_examples),
+                    "mean_reward": float(np.mean(window)),
+                    "degenerate_fraction": float(np.mean(budget.degenerate[-eval_every:])),
+                    "wall_time": round(time.perf_counter() - started, 3),
                 }
             )
             if verbose:

@@ -229,3 +229,30 @@ def test_train_rl_records_an_eval_curve(task):
     assert [p["step"] for p in budget.curve] == [2, 4]
     assert all(0.0 <= p["accuracy"] <= 1.0 for p in budget.curve)
     assert budget.curve[-1]["sampled_completions"] == budget.sampled_completions
+
+
+def test_dynamic_allocation_can_be_switched_off_for_a_matched_sample_budget(task):
+    on = TrainConfig(group_size=8, questions=2, prune_rate=0.5)
+    off = TrainConfig(group_size=8, questions=2, prune_rate=0.5, dynamic_allocation=False)
+    assert on.questions_per_step() == 4 and on.samples_per_step() == 32
+    assert off.questions_per_step() == 2 and off.samples_per_step() == 16
+    model = small_model()
+    reference = clone_model(model)
+    off.lr = 1e-4
+    budget = train_rl(model, reference, task, off, steps=3, key_offset=0)
+    assert budget.sampled_completions == 3 * 2 * 8
+    assert budget.retained_completions == 3 * 2 * 4
+    assert all(np.isfinite(v) for v in budget.reward_means)
+
+
+def test_budget_records_reward_and_degeneracy_statistics(task):
+    model = small_model()
+    reference = clone_model(model)
+    cfg = TrainConfig(group_size=4, questions=2, prune_rate=0.5)
+    cfg.lr = 1e-4
+    budget = train_rl(model, reference, task, cfg, steps=6, eval_every=3, eval_examples=task.test)
+    assert len(budget.reward_means) == 6
+    assert all(0.0 <= v <= 3.0 for v in budget.reward_means)
+    assert all(0.0 <= d <= 1.0 for d in budget.degenerate)
+    assert all(0.0 <= point["mean_reward"] <= 3.0 for point in budget.curve)
+    assert all(0.0 <= point["degenerate_fraction"] <= 1.0 for point in budget.curve)
