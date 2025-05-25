@@ -20,6 +20,7 @@ from cppo.trainer import (
     rollout_loss,
     train_rl,
     train_sft,
+    train_sft_to_accuracy,
 )
 
 
@@ -256,3 +257,25 @@ def test_budget_records_reward_and_degeneracy_statistics(task):
     assert all(0.0 <= d <= 1.0 for d in budget.degenerate)
     assert all(0.0 <= point["mean_reward"] <= 3.0 for point in budget.curve)
     assert all(0.0 <= point["degenerate_fraction"] <= 1.0 for point in budget.curve)
+
+
+def test_sft_band_stops_at_the_first_check_that_reaches_the_target():
+    task = AdditionTask(digits=1, n_train=50, n_test=31, seed=0)
+    model = small_model(seed=3)
+    cfg = TrainConfig(sft_steps=0, sft_batch=32, seed=0)
+    steps, accuracy = train_sft_to_accuracy(
+        model, task, cfg, task.test, target=0.0, max_steps=600, check_every=50
+    )
+    assert steps == 50  # already at or above the target at the first check
+    assert accuracy >= 0.0
+
+
+def test_sft_band_gives_up_at_max_steps_when_the_target_is_out_of_reach():
+    task = AdditionTask(digits=1, n_train=50, n_test=31, seed=0)
+    model = small_model(seed=4)
+    cfg = TrainConfig(sft_steps=0, sft_batch=32, seed=0)
+    steps, accuracy = train_sft_to_accuracy(
+        model, task, cfg, task.test, target=1.01, max_steps=100, check_every=25
+    )
+    assert steps == 100
+    assert accuracy < 1.01

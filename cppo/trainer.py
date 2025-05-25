@@ -224,6 +224,39 @@ def train_sft(model: TinyLM, task: AdditionTask, cfg: TrainConfig, verbose: bool
     return losses
 
 
+def train_sft_to_accuracy(
+    model: TinyLM,
+    task: AdditionTask,
+    cfg: TrainConfig,
+    eval_examples: list[Example],
+    target: float = 0.5,
+    max_steps: int = 1500,
+    check_every: int = 50,
+) -> tuple[int, float]:
+    """Warm up until greedy accuracy on held-out questions first reaches target.
+
+    A fixed warm-up budget is fragile at this size: some initialisations need
+    three times as many supervised steps as others to escape the "always emit
+    the same digit" optimum.  Stopping as soon as the policy is partially
+    competent keeps every RL seed in the regime where groups contain both
+    correct and incorrect completions, which is where the comparison means
+    anything.  Returns (steps run, accuracy reached).
+    """
+    optimizer = optim.AdamW(learning_rate=cfg.sft_lr)
+    rng = np.random.default_rng(cfg.seed)
+    steps = 0
+    accuracy = 0.0
+    while steps < max_steps:
+        for _ in range(min(check_every, max_steps - steps)):
+            idx = rng.integers(0, len(task.train), size=cfg.sft_batch)
+            sft_step(model, [task.train[i] for i in idx], optimizer, cfg.sft_lr)
+            steps += 1
+        accuracy = greedy_accuracy(model, eval_examples)
+        if accuracy >= target:
+            break
+    return steps, accuracy
+
+
 def collect_rollout(
     model: TinyLM,
     reference: TinyLM,
@@ -481,4 +514,5 @@ __all__ = [
     "shuffle_examples",
     "train_rl",
     "train_sft",
+    "train_sft_to_accuracy",
 ]

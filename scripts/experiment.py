@@ -44,7 +44,7 @@ from cppo import (
     gradient_stats,
     retained_per_question,
     train_rl,
-    train_sft,
+    train_sft_to_accuracy,
 )
 
 ARMS = ["grpo", "cppo_rate50_samples", "cppo_threshold1_samples", "cppo_rate50_dynamic"]
@@ -80,7 +80,6 @@ def arm_config(name: str, args) -> TrainConfig:
         clip_eps=args.clip,
         temperature=args.temperature,
         max_new_tokens=args.max_new_tokens,
-        sft_steps=args.sft_steps,
         sft_batch=args.sft_batch,
         seed=args.data_seed,
     )
@@ -146,7 +145,9 @@ def main() -> int:
     parser.add_argument("--clip", type=float, default=0.2)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--max-new-tokens", type=int, default=5)
-    parser.add_argument("--sft-steps", type=int, default=500)
+    parser.add_argument("--sft-target", type=float, default=0.5)
+    parser.add_argument("--sft-max-steps", type=int, default=1500)
+    parser.add_argument("--sft-check-every", type=int, default=50)
     parser.add_argument("--sft-batch", type=int, default=64)
     parser.add_argument("--task-digits", type=int, default=2)
     parser.add_argument("--train-size", type=int, default=512)
@@ -179,6 +180,10 @@ def main() -> int:
     print(
         f"optimiser: AdamW lr={args.lr}, clip={args.clip}, beta={args.beta}, temperature={args.temperature}, "
         f"group size G={args.group_size}"
+    )
+    print(
+        f"warm-up: supervised until greedy test accuracy first reaches {args.sft_target} "
+        f"(at most {args.sft_max_steps} steps, checked every {args.sft_check_every})"
     )
     print()
 
@@ -216,15 +221,23 @@ def main() -> int:
         mx.random.seed(seed)
         base = TinyLM(max_len=24)
         t0 = time.time()
-        losses = train_sft(base, task, TrainConfig(sft_steps=args.sft_steps, sft_batch=args.sft_batch, seed=seed))
-        init_accuracy = evaluate(base, task.test)
+        sft_steps, init_accuracy = train_sft_to_accuracy(
+            base,
+            task,
+            TrainConfig(sft_steps=0, sft_batch=args.sft_batch, seed=seed),
+            task.test,
+            target=args.sft_target,
+            max_steps=args.sft_max_steps,
+            check_every=args.sft_check_every,
+        )
         print(
-            f"  sft: {args.sft_steps} steps in {time.time() - t0:.1f}s, "
-            f"final loss {np.mean(losses[-20:]):.4f}, greedy test accuracy {init_accuracy:.4f}",
+            f"  sft: {sft_steps} steps in {time.time() - t0:.1f}s until greedy test accuracy "
+            f"{init_accuracy:.4f} (target {args.sft_target})",
             flush=True,
         )
         reference = clone_model(base)
         results["init_accuracy"][str(seed)] = init_accuracy
+        results["sft_steps"] = results.get("sft_steps", {}) | {str(seed): sft_steps}
         results["runs"][str(seed)] = {}
 
         # A fixed rollout, used for the gradient-noise statistics.

@@ -1,0 +1,40 @@
+CPPO toy experiment: GRPO vs completion pruning on synthetic addition
+paper: CPPO: Accelerating the Training of Group Relative Policy
+       Optimization-Based Reasoning Models (arXiv:2503.22342)
+date: 2026-10-07
+device: Device(cpu, 0) (cpu is bit-reproducible; gpu embedding backward is not)
+seeds: [0, 1, 2]  steps per arm: 400  eval every 50
+task: 2-digit addition, answer written least significant digit first; 512 train / 128 test pairs
+policy: 3 layers, 96 wide, 4 heads (338304 params); reference = the warmed-up policy, frozen
+optimiser: AdamW lr=0.0003, clip=0.2, beta=0.04, temperature=1.0, group size G=8
+
+step cost per arm:
+  grpo                       questions/step   8  sampled/step   64  retained/step         64
+  cppo_rate50_samples        questions/step   8  sampled/step   64  retained/step         32
+  cppo_threshold1_samples    questions/step   8  sampled/step   64  retained/step at most 64
+  cppo_rate50_dynamic        questions/step  16  sampled/step  128  retained/step         64
+
+=== seed 0 ===
+  sft: 500 steps in 7.1s, final loss 0.2886, greedy test accuracy 0.4688
+  grpo                       steps  400  sampled   25600  retained   25600  wall   23.1s  acc 0.5703  gain/1000 sampled 0.0040  last-loss 0.0063
+  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   18.4s  acc 0.5859  gain/1000 sampled 0.0046  last-loss 0.1485
+  cppo_threshold1_samples    steps  400  sampled   25600  retained    3970  wall   14.8s  acc 0.5625  gain/1000 sampled 0.0037  last-loss 1.1535
+  cppo_rate50_dynamic        steps  400  sampled   51200  retained   25600  wall   31.2s  acc 0.6328  gain/1000 sampled 0.0032  last-loss 0.1965
+  gradient-noise statistics (init -> final policy):
+    P=0.5: snr full 0.476->0.504  snr pruned 0.490->0.504  cos(pruned, full) 0.830->1.000  ||g_pruned||/||g_full|| 2.387->1.958
+    P=0.75: snr full 0.476->0.504  snr pruned 0.496->0.504  cos(pruned, full) 0.713->1.000  ||g_pruned||/||g_full|| 5.524->3.874
+
+=== seed 1 ===
+  sft: 500 steps in 6.9s, final loss 0.7489, greedy test accuracy 0.1406
+  grpo                       steps  400  sampled   25600  retained   25600  wall   23.8s  acc 0.1953  gain/1000 sampled 0.0021  last-loss 0.0162
+  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   18.8s  acc 0.1719  gain/1000 sampled 0.0012  last-loss -0.0857
+  cppo_threshold1_samples    steps  400  sampled   25600  retained    3115  wall   14.9s  acc 0.2266  gain/1000 sampled 0.0034  last-loss -0.4471
+  cppo_rate50_dynamic        steps  400  sampled   51200  retained   25600  wall   31.9s  acc 0.2500  gain/1000 sampled 0.0021  last-loss -0.0248
+  gradient-noise statistics (init -> final policy):
+    P=0.5: snr full 0.497->0.613  snr pruned 0.465->0.551  cos(pruned, full) 0.952->0.924  ||g_pruned||/||g_full|| 1.877->1.288
+    P=0.75: snr full 0.497->0.613  snr pruned 0.463->0.574  cos(pruned, full) 0.905->0.913  ||g_pruned||/||g_full|| 3.996->2.557
+
+=== seed 2 ===
+  sft: 500 steps in 6.8s, final loss 0.8409, greedy test accuracy 0.0938
+  grpo                       steps  400  sampled   25600  retained   25600  wall   24.8s  acc 0.1016  gain/1000 sampled 0.0003  last-loss 0.0165
+  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   20.0s  acc 0.0938  gain/1000 sampled 0.0000  last-loss -0.1067

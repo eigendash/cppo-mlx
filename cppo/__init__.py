@@ -33,6 +33,7 @@ from .trainer import (
     rollout_loss,
     train_rl,
     train_sft,
+    train_sft_to_accuracy,
 )
 
 __version__ = "0.1.0"
@@ -73,4 +74,5 @@ __all__ = [
     "score_completions",
     "train_rl",
     "train_sft",
+    "train_sft_to_accuracy",
 ]
