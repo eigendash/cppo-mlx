@@ -301,7 +301,6 @@ def main() -> int:
             )
         del trained, kept, trained_model
         print(flush=True)
-    sys.stdout = log.stdout
 
     # ---------------------------------------------------------------- tables
     seeds = [str(s) for s in args.seeds]

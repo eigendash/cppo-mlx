@@ -7,6 +7,7 @@ seeds: [0, 1, 2]  steps per arm: 400  eval every 50
 task: 2-digit addition, answer written least significant digit first; 512 train / 128 test pairs
 policy: 3 layers, 96 wide, 4 heads (338304 params); reference = the warmed-up policy, frozen
 optimiser: AdamW lr=0.0003, clip=0.2, beta=0.04, temperature=1.0, group size G=8
+warm-up: supervised until greedy test accuracy first reaches 0.5 (at most 1500 steps, checked every 50)
 
 step cost per arm:
   grpo                       questions/step   8  sampled/step   64  retained/step         64
@@ -15,26 +16,70 @@ step cost per arm:
   cppo_rate50_dynamic        questions/step  16  sampled/step  128  retained/step         64
 
 === seed 0 ===
-  sft: 500 steps in 7.1s, final loss 0.2886, greedy test accuracy 0.4688
-  grpo                       steps  400  sampled   25600  retained   25600  wall   23.1s  acc 0.5703  gain/1000 sampled 0.0040  last-loss 0.0063
-  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   18.4s  acc 0.5859  gain/1000 sampled 0.0046  last-loss 0.1485
-  cppo_threshold1_samples    steps  400  sampled   25600  retained    3970  wall   14.8s  acc 0.5625  gain/1000 sampled 0.0037  last-loss 1.1535
-  cppo_rate50_dynamic        steps  400  sampled   51200  retained   25600  wall   31.2s  acc 0.6328  gain/1000 sampled 0.0032  last-loss 0.1965
+  sft: 550 steps in 8.5s until greedy test accuracy 0.5391 (target 0.5)
+  grpo                       steps  400  sampled   25600  retained   25600  wall   24.3s  acc 0.6562  gain/1000 sampled 0.0046  last-loss 0.0106
+  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   19.0s  acc 0.6406  gain/1000 sampled 0.0040  last-loss 0.1945
+  cppo_threshold1_samples    steps  400  sampled   25600  retained    3380  wall   15.3s  acc 0.6406  gain/1000 sampled 0.0040  last-loss 1.2035
+  cppo_rate50_dynamic        steps  400  sampled   51200  retained   25600  wall   32.7s  acc 0.7188  gain/1000 sampled 0.0035  last-loss 0.1503
   gradient-noise statistics (init -> final policy):
-    P=0.5: snr full 0.476->0.504  snr pruned 0.490->0.504  cos(pruned, full) 0.830->1.000  ||g_pruned||/||g_full|| 2.387->1.958
-    P=0.75: snr full 0.476->0.504  snr pruned 0.496->0.504  cos(pruned, full) 0.713->1.000  ||g_pruned||/||g_full|| 5.524->3.874
+    P=0.5: snr full 0.494->0.500  snr pruned 0.491->0.500  cos(pruned, full) 0.990->1.000  ||g_pruned||/||g_full|| 1.827->1.995
+    P=0.75: snr full 0.494->0.500  snr pruned 0.489->0.500  cos(pruned, full) 0.975->1.000  ||g_pruned||/||g_full|| 3.511->3.985
 
 === seed 1 ===
-  sft: 500 steps in 6.9s, final loss 0.7489, greedy test accuracy 0.1406
-  grpo                       steps  400  sampled   25600  retained   25600  wall   23.8s  acc 0.1953  gain/1000 sampled 0.0021  last-loss 0.0162
-  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   18.8s  acc 0.1719  gain/1000 sampled 0.0012  last-loss -0.0857
-  cppo_threshold1_samples    steps  400  sampled   25600  retained    3115  wall   14.9s  acc 0.2266  gain/1000 sampled 0.0034  last-loss -0.4471
-  cppo_rate50_dynamic        steps  400  sampled   51200  retained   25600  wall   31.9s  acc 0.2500  gain/1000 sampled 0.0021  last-loss -0.0248
+  sft: 650 steps in 10.2s until greedy test accuracy 0.5547 (target 0.5)
+  grpo                       steps  400  sampled   25600  retained   25600  wall   24.1s  acc 0.5781  gain/1000 sampled 0.0009  last-loss 0.0094
+  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   19.0s  acc 0.5938  gain/1000 sampled 0.0015  last-loss 0.1277
+  cppo_threshold1_samples    steps  400  sampled   25600  retained    3730  wall   15.5s  acc 0.5938  gain/1000 sampled 0.0015  last-loss 0.7654
+  cppo_rate50_dynamic        steps  400  sampled   51200  retained   25600  wall   32.8s  acc 0.6484  gain/1000 sampled 0.0018  last-loss 0.1918
   gradient-noise statistics (init -> final policy):
-    P=0.5: snr full 0.497->0.613  snr pruned 0.465->0.551  cos(pruned, full) 0.952->0.924  ||g_pruned||/||g_full|| 1.877->1.288
-    P=0.75: snr full 0.497->0.613  snr pruned 0.463->0.574  cos(pruned, full) 0.905->0.913  ||g_pruned||/||g_full|| 3.996->2.557
+    P=0.5: snr full 0.478->0.501  snr pruned 0.483->0.502  cos(pruned, full) 0.979->0.985  ||g_pruned||/||g_full|| 1.874->1.403
+    P=0.75: snr full 0.478->0.501  snr pruned 0.487->0.500  cos(pruned, full) 0.964->0.897  ||g_pruned||/||g_full|| 3.521->1.947
 
 === seed 2 ===
-  sft: 500 steps in 6.8s, final loss 0.8409, greedy test accuracy 0.0938
-  grpo                       steps  400  sampled   25600  retained   25600  wall   24.8s  acc 0.1016  gain/1000 sampled 0.0003  last-loss 0.0165
-  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   20.0s  acc 0.0938  gain/1000 sampled 0.0000  last-loss -0.1067
+  sft: 1100 steps in 17.4s until greedy test accuracy 0.5000 (target 0.5)
+  grpo                       steps  400  sampled   25600  retained   25600  wall   24.9s  acc 0.4922  gain/1000 sampled -0.0003  last-loss 0.0233
+  cppo_rate50_samples        steps  400  sampled   25600  retained   12800  wall   19.6s  acc 0.4219  gain/1000 sampled -0.0031  last-loss 0.1274
+  cppo_threshold1_samples    steps  400  sampled   25600  retained    1726  wall   14.9s  acc 0.5078  gain/1000 sampled 0.0003  last-loss 1.1800
+  cppo_rate50_dynamic        steps  400  sampled   51200  retained   25600  wall   33.2s  acc 0.5469  gain/1000 sampled 0.0009  last-loss 0.0826
+  gradient-noise statistics (init -> final policy):
+    P=0.5: snr full 0.459->0.450  snr pruned 0.361->0.447  cos(pruned, full) 0.409->0.993  ||g_pruned||/||g_full|| 1.280->1.755
+    P=0.75: snr full 0.459->0.450  snr pruned 0.372->0.447  cos(pruned, full) 0.752->0.981  ||g_pruned||/||g_full|| 2.436->3.287
+
+table 1: matched sampled-completion budget (same completions generated per step)
+arm                         steps  sampled  retained  grad-tok  wall s            acc  acc/1k sampled
+grpo                          400    25600     25600    128000    24.4   0.5755 +- 0.0670          0.0017
+cppo_rate50_samples           400    25600     12800     64000    19.2   0.5521 +- 0.0940          0.0008
+cppo_threshold1_samples       400    25600      2945     14726    15.3   0.5807 +- 0.0550          0.0019
+
+table 2: matched step budget and matched gradient batch (dynamic completion allocation)
+arm                        q/step  sampled  retained  wall s            acc
+grpo                            8    25600     25600    24.4   0.5755 +- 0.0670
+cppo_rate50_dynamic            16    51200     25600    32.9   0.6380 +- 0.0706
+
+table 3: accuracy at a matched wall-clock of 30s per seed
+arm                           acc @  steps @  wall @
+grpo                         0.5755    400.0    24.4
+cppo_rate50_samples          0.5521    400.0    19.2
+cppo_threshold1_samples      0.5807    400.0    15.3
+cppo_rate50_dynamic          0.6172    350.0    28.8
+
+table 4: accuracy along the sampled-completion budget (mean over seeds)
+sampled                    grpo   cppo_rate50_samples  cppo_threshold1_samp   cppo_rate50_dynamic
+3200           0.4948 +- 0.0894      0.4401 +- 0.0161      0.3203 +- 0.0776                     -
+6400           0.5469 +- 0.0338      0.5078 +- 0.0510      0.4635 +- 0.0516      0.5365 +- 0.0792
+9600           0.5807 +- 0.0301      0.5104 +- 0.0579      0.4714 +- 0.0327                     -
+12800          0.5911 +- 0.0772      0.5026 +- 0.0761      0.5286 +- 0.0242      0.5443 +- 0.0224
+16000          0.5859 +- 0.0628      0.5417 +- 0.1237      0.5052 +- 0.0405                     -
+19200          0.5547 +- 0.0522      0.5391 +- 0.1073      0.5677 +- 0.0224      0.5651 +- 0.0772
+22400          0.5990 +- 0.0512      0.5651 +- 0.0579      0.5938 +- 0.0609                     -
+25600          0.5755 +- 0.0670      0.5521 +- 0.0940      0.5807 +- 0.0550      0.5964 +- 0.0479
+
+table 5: gradient-noise statistics on a fixed rollout (mean over seeds)
+prune rate   when  snr full  snr pruned  cos(pruned,full)  ||gp||/||gf||
+       0.5   init     0.477       0.445             0.793          1.660
+      0.75   init     0.477       0.449             0.897          3.156
+       0.5  final     0.484       0.483             0.992          1.718
+      0.75  final     0.484       0.482             0.959          3.073
+
+total wall time 313.1s
+wrote results/experiment.json and results/experiment_log.txt
