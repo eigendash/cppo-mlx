@@ -318,12 +318,28 @@ retained completion 1.00, 2.00, 9.76 and 2.00.
 
 ## Running it
 
+From the repository root:
+
 ```
 /Users/dash/Documents/dev/ai_papers/.venv/bin/python -m pytest
 /Users/dash/Documents/dev/ai_papers/.venv/bin/python scripts/experiment.py
 ```
 
-The experiment writes `results/experiment_log.txt` and
-`results/experiment.json` and takes about five minutes. `--device gpu` switches
-MLX's default device; `--help` lists the rest (seeds, step budget, group size,
-learning rate, warm-up target).
+`python -m pytest` rather than the bare `pytest` script is what puts the
+repository root on `sys.path`, so `cppo` imports without an editable install;
+`pip install -e ".[dev]"` works too if you prefer.
+
+The exact command that produced the committed `results/` was
+
+```
+/Users/dash/Documents/dev/ai_papers/.venv/bin/python scripts/experiment.py --seeds 0 1 2 --steps 400 --eval-every 50
+```
+
+which took 313 s. The run writes `results/experiment_log.txt` (everything the
+script printed, including the five tables above) and `results/experiment.json`
+(the same numbers keyed for reuse: `runs[seed][arm]` holds each arm's budget and
+accuracy curve, `tables` holds the aggregated tables, `gradient_noise` holds the
+per-seed statistics, and `init_accuracy`/`sft_steps` record the warm-up).
+`--device gpu` switches MLX's default device; `--help` lists the rest (seeds,
+step budget, group size, learning rate, pruning, warm-up target).
+

@@ -105,6 +105,13 @@ def _core_loss(
     denominator: mx.array | None = None,
     n_sampled: float | None = None,
 ):
+    """Clipped surrogate plus KL penalty, averaged over completions and tokens.
+
+    ``completion_weight`` scales each completion (0/1 for a retained set, or
+    1/k for the 1/k normalisation); ``denominator`` overrides the divisor that
+    the weighted sum is divided by, which is how eq. 7's ``G`` differs from
+    eq. 9's ``k``.  Both default to the sum of the weights, i.e. to ``1/k``.
+    """
     ratio = mx.exp(logp - logp_old)
     adv = advantages[..., None]
     surrogate = mx.minimum(ratio * adv, mx.clip(ratio, 1.0 - clip_eps, 1.0 + clip_eps) * adv)
@@ -171,7 +178,9 @@ def cppo_loss(
 
     ``normalisation="retained"`` divides by the number of retained completions
     (paper eq. 9, where the divisor is k).  ``normalisation="group"`` divides by
-    the size of the whole group (paper eq. 7, divisor G).
+    the size of the whole group (paper eq. 7, divisor G).  With
+    ``prune_threshold=0`` and ``prune_rate=0`` nothing is pruned and this
+    returns exactly the same number as :func:`grpo_loss`.
     """
     if normalisation not in ("retained", "group"):
         raise ValueError("normalisation must be 'retained' or 'group'")
